@@ -2,15 +2,27 @@ import sys
 import json
 import requests
 import hashlib
+import os
+from datetime import datetime
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QTabWidget, QWidget, QVBoxLayout, 
                              QHBoxLayout, QLabel, QLineEdit, QPushButton, QTextEdit, 
                              QGroupBox, QRadioButton, QFileDialog, QMessageBox, QFormLayout)
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 
+# For PDF export
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+
+# For Word export
+from docx import Document
+from docx.shared import Inches
+
 class ThreatIntelligenceApp(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.current_results = ""  # Store current results for export
         self.initUI()
         self.load_settings()
         
@@ -103,6 +115,17 @@ class ThreatIntelligenceApp(QMainWindow):
         self.results_text.setReadOnly(True)
         results_layout.addWidget(self.results_text)
         
+        # Export buttons
+        export_btn_layout = QHBoxLayout()
+        self.export_pdf_btn = QPushButton("Export as PDF")
+        self.export_pdf_btn.clicked.connect(self.export_pdf)
+        self.export_word_btn = QPushButton("Export as Word")
+        self.export_word_btn.clicked.connect(self.export_word)
+        
+        export_btn_layout.addWidget(self.export_pdf_btn)
+        export_btn_layout.addWidget(self.export_word_btn)
+        results_layout.addLayout(export_btn_layout)
+        
         results_group.setLayout(results_layout)
         layout.addWidget(results_group)
         
@@ -182,6 +205,9 @@ class ThreatIntelligenceApp(QMainWindow):
         vt_result = self.scan_virustotal_ip(ip, virustotal_key)
         self.results_text.append(vt_result)
         
+        # Store results for export
+        self.current_results = self.results_text.toPlainText()
+        
     def scan_file(self):
         file_path = self.file_path_input.text().strip()
         if not file_path:
@@ -210,8 +236,13 @@ class ThreatIntelligenceApp(QMainWindow):
             vt_result = self.scan_virustotal_file(file_hash, virustotal_key)
             self.results_text.append(vt_result)
             
+            # Store results for export
+            self.current_results = self.results_text.toPlainText()
+            
         except Exception as e:
-            self.results_text.append(f"Error: {str(e)}")
+            error_msg = f"Error: {str(e)}"
+            self.results_text.append(error_msg)
+            self.current_results = self.results_text.toPlainText()
             
     def calculate_file_hash(self, file_path):
         sha256_hash = hashlib.sha256()
@@ -359,6 +390,71 @@ class ThreatIntelligenceApp(QMainWindow):
         except Exception as e:
             return f"Error scanning with VirusTotal: {str(e)}"
             
+    def export_pdf(self):
+        if not self.current_results:
+            QMessageBox.warning(self, "Export Error", "No results to export. Please run a scan first.")
+            return
+            
+        file_path, _ = QFileDialog.getSaveFileName(self, "Export PDF", "", "PDF Files (*.pdf)")
+        if file_path:
+            try:
+                # Create PDF document
+                doc = SimpleDocTemplate(file_path, pagesize=letter)
+                styles = getSampleStyleSheet()
+                story = []
+                
+                # Add title
+                title = Paragraph("Threat Intelligence Report", styles['Title'])
+                story.append(title)
+                story.append(Spacer(1, 12))
+                
+                # Add timestamp
+                timestamp = Paragraph(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", styles['Normal'])
+                story.append(timestamp)
+                story.append(Spacer(1, 12))
+                
+                # Add results
+                for line in self.current_results.split('\n'):
+                    if line.strip():  # Skip empty lines
+                        p = Paragraph(line.replace(' ', '&nbsp;'), styles['Normal'])
+                        story.append(p)
+                
+                # Build PDF
+                doc.build(story)
+                QMessageBox.information(self, "Export Successful", f"PDF exported successfully to:\n{file_path}")
+                
+            except Exception as e:
+                QMessageBox.critical(self, "Export Error", f"Failed to export PDF: {str(e)}")
+                
+    def export_word(self):
+        if not self.current_results:
+            QMessageBox.warning(self, "Export Error", "No results to export. Please run a scan first.")
+            return
+            
+        file_path, _ = QFileDialog.getSaveFileName(self, "Export Word", "", "Word Documents (*.docx)")
+        if file_path:
+            try:
+                # Create Word document
+                doc = Document()
+                
+                # Add title
+                doc.add_heading('Threat Intelligence Report', 0)
+                
+                # Add timestamp
+                doc.add_paragraph(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                
+                # Add results
+                for line in self.current_results.split('\n'):
+                    if line.strip():  # Skip empty lines
+                        doc.add_paragraph(line)
+                
+                # Save document
+                doc.save(file_path)
+                QMessageBox.information(self, "Export Successful", f"Word document exported successfully to:\n{file_path}")
+                
+            except Exception as e:
+                QMessageBox.critical(self, "Export Error", f"Failed to export Word document: {str(e)}")
+            
     def load_settings(self):
         # In a real application, you would load these from a config file
         # For now, we'll set the default values you provided
@@ -368,9 +464,86 @@ class ThreatIntelligenceApp(QMainWindow):
     def save_settings(self):
         # In a real application, you would save these to a config file
         QMessageBox.information(self, "Settings Saved", "API keys have been saved successfully!")
-        
+def apply_stylesheet(app):
+    app.setStyleSheet("""
+        QWidget {
+            font-family: 'Segoe UI', Roboto, Arial;
+            font-size: 14px;
+            background-color: #f8f9fb;
+            color: #2c3e50;
+        }
+
+        QMainWindow {
+            background-color: #f8f9fb;
+        }
+
+        QTabWidget::pane {
+            border: 1px solid #dcdde1;
+            border-radius: 6px;
+            padding: 6px;
+        }
+
+        QTabBar::tab {
+            background: #ecf0f1;
+            border: 1px solid #bdc3c7;
+            border-bottom: none;
+            border-radius: 6px 6px 0 0;
+            padding: 8px 16px;
+            margin-right: 2px;
+        }
+
+        QTabBar::tab:selected {
+            background: #ffffff;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        QGroupBox {
+            font-weight: bold;
+            border: 1px solid #dcdde1;
+            border-radius: 8px;
+            margin-top: 12px;
+            padding: 10px;
+            background-color: #ffffff;
+        }
+
+        QLineEdit {
+            border: 1px solid #bdc3c7;
+            border-radius: 6px;
+            padding: 6px;
+            background-color: #ffffff;
+        }
+
+        QTextEdit {
+            border: 1px solid #bdc3c7;
+            border-radius: 6px;
+            padding: 8px;
+            background-color: #1e272e;
+            color: #ecf0f1;
+            font-family: Consolas, monospace;
+            font-size: 13px;
+        }
+
+        QPushButton {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 14px;
+        }
+
+        QPushButton:hover {
+            background-color: #2980b9;
+        }
+
+        QPushButton:pressed {
+            background-color: #2471a3;
+        }
+    """)
+
 def main():
     app = QApplication(sys.argv)
+    apply_stylesheet(app)
     window = ThreatIntelligenceApp()
     window.show()
     sys.exit(app.exec_())
