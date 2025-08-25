@@ -20,8 +20,8 @@ Bu tətbiq müxtəlif Threat Intelligence (TI) platformalarından istifadə edə
 ### 1️⃣ Repository-ni klonla
 
 ```bash
-git clone https://github.com/yourusername/threat-intelligence-checker.git
-cd threat-intelligence-checker
+git clone [https://github.com/yourusername/threat-intelligence-checker.git](https://github.com/nijatmansimov/Threat-Intelligence-Desktop-App.git)
+cd Threat-Intelligence-Desktop-App
 ```
 
 ### 2️⃣ Virtual mühit yarat (opsional, amma tövsiyə olunur)
